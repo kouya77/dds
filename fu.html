@@ -83,7 +83,7 @@
       const interval = setInterval(() => {
         currentStep++;
         const percent = Math.min(Math.round((currentStep / totalSteps) * 100), 100);
-        progressText.textContent = `録画中... ${percent}%`;
+        progressText.textContent = `読み込み中... ${percent}%`;
         progressFill.style.width = `${percent}%`;
 
         if (currentStep >= totalSteps) {
